@@ -17,9 +17,9 @@ app.use(cors({
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
-    
+
     console.log('Request from origin:', origin);
-    
+
     if (allowedOrigins.indexOf(origin) !== -1) {
       console.log('Origin allowed:', origin);
       callback(null, true);
@@ -126,14 +126,14 @@ app.post('/api/user', authenticate, async (req, res) => {
     if (req.user.uid !== uid) {
       return res.status(403).json({ error: 'Unauthorized access' });
     }
-    
+
     let user = await User.findOne({ uid });
     if (!user) {
-      user = new User({ 
-        uid, 
-        name, 
-        email, 
-        photoURL, 
+      user = new User({
+        uid,
+        name,
+        email,
+        photoURL,
         _id: uid,
         createdAt: new Date(),
         updatedAt: new Date()
@@ -201,8 +201,8 @@ app.get('/api/connections/:uid', authenticate, async (req, res) => {
     if (req.user.uid !== req.params.uid) {
       return res.status(403).json({ error: 'Unauthorized access' });
     }
-    const conns = await Connection.find({ 
-      $or: [{ fromUid: req.params.uid }, { toUid: req.params.uid }] 
+    const conns = await Connection.find({
+      $or: [{ fromUid: req.params.uid }, { toUid: req.params.uid }]
     });
     res.json(conns);
   } catch (err) {
@@ -215,20 +215,20 @@ app.post('/api/connections/request', authenticate, async (req, res) => {
   try {
     const { from, to } = req.body;
     if (!from || !to) return res.status(400).json({ error: 'Missing from or to' });
-    
+
     // Ensure user can only send requests from their own UID
     if (req.user.uid !== from) {
       return res.status(403).json({ error: 'Unauthorized access' });
     }
-    
+
     const exists = await ConnectionRequest.findOne({ from, to });
     if (exists) return res.status(409).json({ error: 'Request already sent' });
-    
-    const connected = await Connection.findOne({ 
-      $or: [{ fromUid: from, toUid: to }, { fromUid: to, toUid: from }] 
+
+    const connected = await Connection.findOne({
+      $or: [{ fromUid: from, toUid: to }, { fromUid: to, toUid: from }]
     });
     if (connected) return res.status(409).json({ error: 'Already connected' });
-    
+
     const reqDoc = await ConnectionRequest.create({ from, to });
     res.json(reqDoc);
   } catch (err) {
@@ -241,12 +241,12 @@ app.post('/api/connections/accept', authenticate, async (req, res) => {
   try {
     const { from, to } = req.body;
     if (!from || !to) return res.status(400).json({ error: 'Missing from or to' });
-    
+
     // Ensure user can only accept requests sent to them
     if (req.user.uid !== to) {
       return res.status(403).json({ error: 'Unauthorized access' });
     }
-    
+
     await Connection.create({ fromUid: from, toUid: to });
     await ConnectionRequest.deleteOne({ from, to });
     res.json({ success: true });
@@ -260,12 +260,12 @@ app.post('/api/connections/reject', authenticate, async (req, res) => {
   try {
     const { from, to } = req.body;
     if (!from || !to) return res.status(400).json({ error: 'Missing from or to' });
-    
+
     // Ensure user can only reject requests sent to them
     if (req.user.uid !== to) {
       return res.status(403).json({ error: 'Unauthorized access' });
     }
-    
+
     await ConnectionRequest.deleteOne({ from, to });
     res.json({ success: true });
   } catch (err) {
@@ -277,12 +277,12 @@ app.post('/api/connections/reject', authenticate, async (req, res) => {
 app.get('/api/connections/requests/:uid', authenticate, async (req, res) => {
   try {
     const { uid } = req.params;
-    
+
     // Ensure user can only view their own requests
     if (req.user.uid !== uid) {
       return res.status(403).json({ error: 'Unauthorized access' });
     }
-    
+
     const requests = await ConnectionRequest.find({ to: uid });
     res.json(requests);
   } catch (err) {
@@ -295,12 +295,12 @@ app.post('/api/messages/send', authenticate, async (req, res) => {
   try {
     const { from, to, text } = req.body;
     if (!from || !to || !text) return res.status(400).json({ error: 'Missing from, to, or text' });
-    
+
     // Ensure user can only send messages from their own UID
     if (req.user.uid !== from) {
       return res.status(403).json({ error: 'Unauthorized access' });
     }
-    
+
     const msg = await Message.create({ from, to, text });
     res.json(msg);
   } catch (err) {
@@ -312,12 +312,12 @@ app.post('/api/messages/send', authenticate, async (req, res) => {
 app.get('/api/messages/:uid1/:uid2', authenticate, async (req, res) => {
   try {
     const { uid1, uid2 } = req.params;
-    
+
     // Ensure user can only view messages they're involved in
     if (req.user.uid !== uid1 && req.user.uid !== uid2) {
       return res.status(403).json({ error: 'Unauthorized access' });
     }
-    
+
     const msgs = await Message.find({
       $or: [
         { from: uid1, to: uid2 },
@@ -361,10 +361,24 @@ app.get('/api/root', (req, res) => {
   res.send('StudLyf Backend API is running! (root endpoint)');
 });
 
+// Sitemap route
+app.get('/sitemap.xml', (req, res) => {
+  res.header('Content-Type', 'application/xml');
+  res.send(`
+    <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+      <url><loc>https://www.studlyf.in/finance</loc></url>
+      <url><loc>https://www.studlyf.in/events</loc></url>
+      <url><loc>https://www.studlyf.in/network</loc></url>
+      <url><loc>https://www.studlyf.in/project-hunt</loc></url>
+      <url><loc>https://www.studlyf.in/startups</loc></url>
+    </urlset>
+  `);
+});
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
+  res.json({
+    status: 'OK',
     timestamp: new Date().toISOString(),
     cors: {
       allowedOrigins: allowedOrigins
@@ -375,8 +389,8 @@ app.get('/api/health', (req, res) => {
 // Start server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log( 'Server running in the port ${PORT}');
-  console.log( 'CORS enabled for origins: ${allowedOrigins.join(', ')}');
+  console.log('Server running in the port ${PORT}');
+  console.log('CORS enabled for origins: ${allowedOrigins.join(', ')}');
 });
 
 module.exports = app;
